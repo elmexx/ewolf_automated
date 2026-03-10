@@ -1,0 +1,14 @@
+@copyright(c) 2020 This program is the confidential and proprietary product of Valeo
+                   Schalter und Sensoren GmbH (Driving Assistance Research).
+                   All rights reserved.
+
+                   VALEO Schalter und Sensoren GmbH (Driving Assistance Research) will
+                   take no responsibility for any improper behavior of the software. In case of
+                   equipping test vehicles with the sensor kit, VALEO Schalter und Sensoren
+                   GmbH takes no liability on the behavior of the test vehicles equipped with
+                   the sensor kit or any damage caused within or outside to material and people.
+
+The Scala decoder SDK is distributed without any warranty;
+without even the implied warranty of merchantability or fitness for a particular purpose.
+In case of copyright questions, please refer to the end user license agreement (EULA) or
+contact a Valeo representative.

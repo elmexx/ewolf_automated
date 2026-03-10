@@ -1,0 +1,8 @@
+Installation der NDI Lib für ROS2
+
+Laden der setup.bash
+cd in ws-Verzeichnis
+ausführen von: 
+export LIBRARY_PATH=:"/home/jetson/ros2_AEb_ws/src/ndi_sdk/lib"
+
+colcon build --packages-select ndi_sdk
