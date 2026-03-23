@@ -53,3 +53,7 @@
 - 完成 GPS/IMU 真融合（参数真正生效，状态一致更新）；
 - 建立可复现实车/仿真回放流程与性能指标看板（时延、稳定性、轨迹误差）。
 
+
+## 五、专项文档
+
+- `docs/lane_following_optimization_roadmap.md`：lane-following 稳定性专项路线图，聚焦观测诊断、reference path 稳定化、延迟补偿、controller 抗抖与回归验证。
