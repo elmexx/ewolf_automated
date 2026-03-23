@@ -315,10 +315,10 @@ class Lanedet(Node):
         msg_stamp = self.get_clock().now().to_msg()
         
         combined_lanes.header.stamp = msg_stamp
-        combined_lanes.header.frame_id =='base_link'
+        combined_lanes.header.frame_id ='base_link'
 
         left_detection.header.stamp = msg_stamp
-        left_detection.header.frame_id =='base_link'
+        left_detection.header.frame_id ='base_link'
         if leftparam.size == 0:
             left_detection.a = 0.0
             left_detection.b = 0.0
@@ -339,7 +339,7 @@ class Lanedet(Node):
                 combined_lanes.markings_left.append(lmp)
         
         right_detection.header.stamp = msg_stamp
-        right_detection.header.frame_id =='base_link'
+        right_detection.header.frame_id ='base_link'
         if rightparam.size == 0:
             right_detection.a = 0.0
             right_detection.b = 0.0
