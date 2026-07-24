@@ -1,0 +1,8 @@
+sudo modprobe can
+sudo modprobe can-raw
+sudo modprobe mttcan
+
+sudo ip link set can0 up type can bitrate 500000 sample-point 0.7 dbitrate 2000000 dsample-point 0.75 fd on
+
+ros2 run valeo_radar_package radar_node --ros-args -p canbus_name:=can0 -p sensor_location:=4
+

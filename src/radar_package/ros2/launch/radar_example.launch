@@ -1,0 +1,14 @@
+<launch>
+
+    <!-- Static publishing of tf2 mapping from "map" to "radar_detections" -->
+    <node   pkg="tf2_ros"
+            exec="static_transform_publisher"
+            name="map_to_radar_detections"
+            args="0.0 0.0 0.0 0.0 0.0 0.0 map radar_detections"/>
+
+    <!-- Visualization -->
+    <node   pkg="rviz2"
+            exec="rviz2"
+            args="-d $(find-pkg-share valeo_radar_package)/rviz/radar_example.rviz"/>
+
+</launch>

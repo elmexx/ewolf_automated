@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.16.3 FATAL_ERROR)
+project(valeo_radar_package)
+
+if (NOT CMAKE_C_STANDARD)
+    set(CMAKE_C_STANDARD 99)
+endif ()
+if (NOT CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 14)
+endif ()
+if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif ()
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+add_executable(radar_node src/radar_node.cpp)
+target_include_directories(radar_node PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../radar_decoder)
+target_sources(radar_node PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../radar_decoder/mcr1.cpp)
+ament_target_dependencies(radar_node rclcpp sensor_msgs geometry_msgs)
+install(TARGETS radar_node DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY rviz DESTINATION share/${PROJECT_NAME})
+ament_package()

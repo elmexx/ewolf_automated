@@ -19,34 +19,43 @@ find_package(cv_bridge REQUIRED)
 set(NDI_SDK_PATH ${CMAKE_CURRENT_LIST_DIR})
 
 include_directories(
-    ${NDI_SDK_PATH}/include
+  ${NDI_SDK_PATH}/include
 )
 
 add_executable(Send_Lidar src/Send_Lidar.cpp)
 add_executable(Send_Kamera src/Send_Kamera.cpp)
+add_executable(Send_Radar src/Send_Radar.cpp)
+
 ament_target_dependencies(Send_Lidar rclcpp sensor_msgs cv_bridge)
 ament_target_dependencies(Send_Kamera rclcpp sensor_msgs cv_bridge)
+ament_target_dependencies(Send_Radar rclcpp sensor_msgs cv_bridge)
 
 target_link_libraries(Send_Lidar libndi.so)
 target_link_libraries(Send_Kamera libndi.so)
+target_link_libraries(Send_Radar libndi.so)
 
 target_include_directories(Send_Lidar PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
-install(TARGETS Send_Lidar
-  DESTINATION lib/${PROJECT_NAME})
-  
 target_include_directories(Send_Kamera PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
-install(TARGETS Send_Kamera
-  DESTINATION lib/${PROJECT_NAME})
-  
+target_include_directories(Send_Radar PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
+install(TARGETS
+  Send_Lidar
+  Send_Kamera
+  Send_Radar
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(
-    DIRECTORY lib/
-    DESTINATION lib
+  DIRECTORY lib/
+  DESTINATION lib
 )
 
 ament_package()

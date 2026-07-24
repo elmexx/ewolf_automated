@@ -1,0 +1,28 @@
+radar_bev_visualizer:
+  ros__parameters:
+    infra_topic: "/radar_detection_pcl_infra"
+    non_infra_topic: "/radar_detection_pcl_non_infra"
+    output_image_topic: "/radar_bev_image"
+    frame_id: "radar_bev"
+
+    image_width: 1280
+    image_height: 720
+
+    max_range_m: 20.0
+    min_range_m: 0.5
+    max_abs_azimuth_deg: 60.0
+    min_z_m: -2.0
+    max_z_m: 2.0
+    max_azimuth_std_deg: 10.0
+
+    static_doppler_threshold_mps: 0.20
+    history_window_sec: 0.60
+    publish_rate_hz: 15.0
+
+    show_infra: true
+    show_non_infra: true
+    show_grid: true
+    show_labels: true
+    show_history: true
+    show_status_overlay: true
+    emphasize_non_infra: true

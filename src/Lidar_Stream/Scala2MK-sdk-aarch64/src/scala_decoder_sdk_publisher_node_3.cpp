@@ -121,7 +121,7 @@ private:
                         point.intensity = scanPoint.epw; // epw
                         pclVecFrame->push_back(point);
                     }
-                    pclVecFrame->header.frame_id = "scala_decoder_sdk_lidar";
+                    pclVecFrame->header.frame_id = "lidar_center";
                     auto message = sensor_msgs::msg::PointCloud2();
                     pcl::toROSMsg(*pclVecFrame, message);
                     mPublisher->publish(message);

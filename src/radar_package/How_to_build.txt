@@ -1,0 +1,57 @@
+What you will need:
+
+ - Basic decoder app:
+     - C++ compiler
+
+ - Ros2 node:
+     - C++ compiler
+     - Ros2 installation (tested with humble hawksbill)
+
+
+Building:
+
+    1. Build decoder app using your preferred compiler:
+        - Go to the workspace root directory (where this file is located) and build the app,
+          including the files from the "radar_decoder" directory
+         - Example:
+            g++ -pthread -I/radar_decoder -o decoder_app decoder_main.cpp radar_decoder/mcr1.cpp
+
+    2. Build ros2 node (optional):
+        - Source your ros2 distribution
+        - Change into the "ros2" directory
+        - Run command "colcon build"
+
+
+Usage:
+
+    1. Decoder Application
+        - Connect the sensor and set up the CAN bus correctly (see below)
+            > CAN bus setup:
+                    * CAN FD
+                    * bitrate 500kBit
+                    * data bitrate 2MBit
+                    * sample-points at 0.7 for arbitration phase and 0.75 for data transmission
+
+        - Start the decoding app from a terminal and supply its paramters
+            > Example:
+                ./<app_name> <name_of_can_bus> <id_of_connected_sensor>
+
+            > Sensor ids are defined as follows:
+                front_left      0
+                front_right     1
+                rear_left       2
+                rear_right      3
+                front           4
+
+        - You should see static and dynamic detections being printed out to the terminal
+
+    2. Ros2 node (optional)
+        - Source your ros2 distribution
+        - Source the setup file found in the install folder of the ros package you built
+
+        - Launch the project using the provided launch file
+            > This will open an rviz2 window with some default settings to show detections from the sensor
+
+        - Run the node for your specific sensor
+            > Example:
+                ros2 run valeo_radar_package radar_node --ros-args -p canbus_name:=<name_of_can_bus> -p sensor_location:=<id_of_connected_sensor>
