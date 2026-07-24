@@ -17,3 +17,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[project.scripts]
+odd-bag-health = "odd_extraction.cli.bag_health:main"

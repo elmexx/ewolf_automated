@@ -1,0 +1,94 @@
+schema_version: 1
+thresholds:
+  minimum_message_count: 2
+  minimum_coverage_ratio: 0.80
+  degraded_coverage_ratio: 0.50
+  maximum_start_delay_s: 5.0
+  maximum_end_shortfall_s: 5.0
+  long_gap_factor: 5.0
+  minimum_long_gap_s: 0.5
+  degraded_maximum_gap_s: 2.0
+  unusable_maximum_gap_s: 30.0
+analysis:
+  core_domains:
+    - ego_motion
+    - localization
+  optional_domains:
+    - lane_observation
+    - object_observation
+    - camera
+    - tf
+  full_requires:
+    - ego_motion
+    - localization
+    - lane_observation
+    - object_observation
+    - camera
+    - tf
+  outputs:
+    motion_state:
+      requires:
+        - ego_motion
+    localization_condition:
+      requires:
+        - localization
+    lane_observation:
+      requires:
+        - lane_observation
+    traffic_presence:
+      requires:
+        - object_observation
+    camera_context:
+      requires:
+        - camera
+    transform_context:
+      requires:
+        - tf
+domains:
+  ego_motion:
+    policy: any
+    minimum_usable_topics: 1
+    topics:
+      - /vehicle_dynamic_data
+      - /odometry/vehicle
+      - /odometry/filtered
+      - /gnss/velocity
+      - /imu/data
+  localization:
+    policy: any
+    minimum_usable_topics: 1
+    topics:
+      - /gnss/fix
+      - /gnss/ecef
+      - /gnss/ned
+      - /gnss/quality
+      - /gnss/status
+      - /odometry/filtered
+  lane_observation:
+    policy: any
+    minimum_usable_topics: 1
+    topics:
+      - /detection/lane/lane_markings_projected
+      - /detection/lane/rightlanedetection
+      - /detection/lane/leftlanedetection
+      - /detection/lane/image_raw
+  object_observation:
+    policy: any
+    minimum_usable_topics: 1
+    topics:
+      - /detection/object/yolo2ddetection
+      - /detection/object/yolo2dbboxes
+      - /detection/object/image_raw
+  camera:
+    policy: any
+    minimum_usable_topics: 1
+    topics:
+      - /camera/color/image_raw
+      - /camera/imu
+      - /camera/gyro/sample
+      - /camera/accel/sample
+  tf:
+    policy: all
+    topics:
+      - /tf
+      - /tf_static
