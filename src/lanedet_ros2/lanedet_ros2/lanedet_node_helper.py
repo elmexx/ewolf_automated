@@ -33,6 +33,9 @@ from lanedet.utils.visualization import imshow_lanes
 from lanedet.utils.net_utils import load_network
 from pathlib import Path
 from .tools.lane_parameter import DictObjHolder, bev_perspective, PolynomialRegression, get_fit_param, insertLaneBoundary
+from .lane_geometry import calculate_ego_geometry
+from .lane_observation import JsonlWriter, LaneObservation, make_lanes
+from .lane_visualization import add_observation_overlay
 
 # garmin 1920*1080
 """
@@ -125,6 +128,10 @@ class Lanedet(Node):
         super().__init__('lanedet_node')
 
         self.declare_parameter("camera_topic", "/camera/color/image_raw")
+        self.declare_parameter("publish_lane_observation", False)
+        self.declare_parameter("publish_debug_overlay", False)
+        self.declare_parameter("save_lane_observation", False)
+        self.declare_parameter("lane_observation_path", "lane_observations.jsonl")
         # Create a subscriber to the Image topic
         camera_topic = self.get_parameter("camera_topic").get_parameter_value().string_value
         self.get_logger().info("Subscription from %s" % camera_topic)
@@ -149,6 +156,31 @@ class Lanedet(Node):
 
         # Create an Image publisher for the results
         self.result_publisher = self.create_publisher(SensorImage,'/detection/lane/image_raw',10)
+
+        # Optional outputs are not created unless explicitly enabled.  The
+        # observation is JSON in std_msgs/String so no existing interface
+        # package needs to change during this first integration step.
+        self.publish_lane_observation = self.get_parameter(
+            "publish_lane_observation").value
+        self.publish_debug_overlay = self.get_parameter(
+            "publish_debug_overlay").value
+        self.save_lane_observation = self.get_parameter(
+            "save_lane_observation").value
+        self.optional_output_enabled = (self.publish_lane_observation or
+                                        self.publish_debug_overlay or
+                                        self.save_lane_observation)
+        self.observation_publisher = None
+        self.debug_overlay_publisher = None
+        self.observation_writer = None
+        if self.publish_lane_observation:
+            self.observation_publisher = self.create_publisher(
+                String, '/lane_observation', 10)
+        if self.publish_debug_overlay:
+            self.debug_overlay_publisher = self.create_publisher(
+                SensorImage, '/lane_observation/debug_overlay', 10)
+        if self.save_lane_observation:
+            path = self.get_parameter("lane_observation_path").value
+            self.observation_writer = JsonlWriter(path)
 
         # load lanedet Net
         cfg_path = os.path.join(os.getenv("HOME"), 'ros2_ws/src/lanedet_ros2/lanedet_ros2/configs/condlane/resnet101_culane.py')
@@ -262,6 +294,14 @@ class Lanedet(Node):
             if egoright[0][1] < -3:
                 egoright = np.array([])
 
+        # Preserve actual detector availability before the legacy fallback
+        # synthesizes the missing side for its polynomial output.
+        if self.optional_output_enabled:
+            left_available = egoleft.size != 0
+            right_available = egoright.size != 0
+            observed_egoleft = egoleft
+            observed_egoright = egoright
+
         if egoleft.size==0 and egoright.size!=0:
             egoleft = egoright.copy()
             egoleft[:,1] = egoleft[:,1]+4 #3.5
@@ -367,9 +407,49 @@ class Lanedet(Node):
         ros_image = self.bridge.cv2_to_imgmsg(img,"bgr8")
         ros_image.header.frame_id = 'img_frame'
         self.result_publisher.publish(ros_image)
+
+        if self.optional_output_enabled:
+            valid_lanes = [lane for lane in lanes_wc if len(lane) > 0]
+            geometry = calculate_ego_geometry(
+                observed_egoleft, observed_egoright,
+                left_available, right_available)
+            observed_lanes = make_lanes(
+                valid_lanes, observed_egoleft, observed_egoright)
+            timestamp_ns = msg_stamp.sec * 1000000000 + msg_stamp.nanosec
+            observation = LaneObservation(
+                timestamp_ns=timestamp_ns,
+                frame_id='base_link',
+                status='detected' if observed_lanes else 'not_detected',
+                lane_marking_count=len(observed_lanes),
+                left_available=left_available,
+                right_available=right_available,
+                lanes=observed_lanes,
+                lane_width=geometry.lane_width,
+                curvature=geometry.curvature,
+                radius=geometry.radius,
+                direction=geometry.direction,
+                processing_time_ms=(time.time() - start_time) * 1000.0,
+            )
+            if self.observation_publisher is not None:
+                message = String()
+                message.data = observation.to_json()
+                self.observation_publisher.publish(message)
+            if self.debug_overlay_publisher is not None:
+                overlay = add_observation_overlay(lane_img, observation)
+                overlay_message = self.bridge.cv2_to_imgmsg(overlay, "bgr8")
+                overlay_message.header.stamp = msg_stamp
+                overlay_message.header.frame_id = 'img_frame'
+                self.debug_overlay_publisher.publish(overlay_message)
+            if self.observation_writer is not None:
+                self.observation_writer.write(observation)
         delaylane = time.time()-start_time
         self.get_logger().info(f'Time LaneDetection: {delaylane:.3f} s')
-        
-        
-        
 
+    def destroy_node(self):
+        if self.observation_writer is not None:
+            self.observation_writer.close()
+            self.observation_writer = None
+        return super().destroy_node()
+        
+        
+        
