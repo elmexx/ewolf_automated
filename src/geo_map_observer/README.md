@@ -2,9 +2,9 @@
 
 `geo_map_observer` is a ROS 2 Foxy Python package that subscribes to
 `sensor_msgs/msg/NavSatFix`, validates geographic coordinates, and periodically
-logs valid latitude/longitude observations. It can also load road geometry from
-an offline OSM XML map at startup. Map loading remains independent of GNSS
-callbacks; nearest-road matching is not implemented.
+optionally logs valid latitude/longitude observations. It loads road geometry
+from an offline OSM XML map and matches every accepted fix to the nearest
+configured drivable highway candidate.
 
 By default the node listens on `/gnss/fix`. It can optionally cache the latest
 `sensor_driver_msgs/msg/GnssStatus` and `GnssQuality` messages without
@@ -42,7 +42,7 @@ Parameters can be overridden on the command line, for example:
 
 ```bash
 ros2 run geo_map_observer gnss_position_node --ros-args \
-  -p gnss_fix_topic:=/gnss/fix -p log_interval_sec:=2.0 \
+  -p gnss_fix_topic:=/gnss/fix -p road_match_log_interval_sec:=2.0 \
   -p require_fix_status:=true \
   -p subscribe_gnss_status:=true -p subscribe_gnss_quality:=true
 ```
@@ -54,7 +54,7 @@ Load a map stored outside the package (for example under the workspace's
 ros2 run geo_map_observer gnss_position_node --ros-args \
   -p map_file:=/absolute/path/to/workspace/maps/map.osm \
   -p require_fix_status:=false \
-  -p log_interval_sec:=0.0
+  -p road_match_log_interval_sec:=0.0
 ```
 
 The loader expands `~`, resolves the path, and requires an existing regular
@@ -96,7 +96,15 @@ validation, so both NaN and `0.0` are accepted.
 | --- | --- | --- |
 | `gnss_fix_topic` | `/gnss/fix` | `NavSatFix` input topic. |
 | `require_fix_status` | `false` | Reject `STATUS_NO_FIX` when enabled. |
-| `log_interval_sec` | `1.0` | Minimum interval between logs of each throttled category. |
+| `enable_gnss_position_log` | `false` | Enable raw position logs. |
+| `gnss_position_log_interval_sec` | `1.0` | Minimum interval between raw position logs. |
+| `enable_road_match_log` | `true` | Enable compact road-match logs. |
+| `road_match_log_interval_sec` | `1.0` | Repeated-road log interval; way, highway, or speed changes log immediately. |
+| `enable_status_warning_log` | `true` | Enable status/invalid-fix warnings. |
+| `status_warning_log_interval_sec` | `10.0` | Warning throttle interval. |
+| `enable_road_matching` | `true` | Match every accepted fix when a map is loaded. |
+| `max_match_distance_m` | `20.0` | Maximum distance for a successful match. |
+| `drivable_highway_types` | major road types, `residential`, `living_street`, `service` | Highway values eligible for vehicle matching. |
 | `subscribe_gnss_status` | `false` | Cache `/gnss/status` messages. |
 | `subscribe_gnss_quality` | `false` | Cache `/gnss/quality` messages. |
 | `map_file` | `""` | Offline `.osm` XML file to load; empty disables map loading. |
@@ -106,10 +114,18 @@ validation, so both NaN and `0.0` are accepted.
 `geo_map_observer.osm_loader` uses the Python standard library's streaming XML
 parser. It retains every OSM node and every way tagged `highway` that resolves
 to at least two coordinates, including ordered node references, coordinates,
-and the optional `name`, `maxspeed`, `lanes`, and `oneway` tags. Non-highway
+and the optional `name`, `ref`, `maxspeed`, `lanes`, and `oneway` tags. Non-highway
 ways are ignored. Missing references and skipped highway ways are counted and
 reported in a single startup summary together with the map bounds and highway
 type counts.
+
+All retained highways stay in `OsmMapData`. Candidate classification only
+selects which ways the vehicle matcher searches. Footways, cycleways, paths,
+tracks, steps, pedestrian ways, platforms, and corridors are contextual by
+default; users may explicitly add values such as `track` or `path`. Startup
+logs report totals and per-type counts for both groups. Matching uses a local
+metric projection and point-to-segment distance. It does not infer access from
+other OSM tags, vehicle heading, or route continuity.
 
 ## Test
 

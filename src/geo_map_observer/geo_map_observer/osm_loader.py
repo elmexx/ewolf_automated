@@ -24,6 +24,7 @@ class OsmHighwayWay:
     way_id: int
     highway: str
     name: Optional[str]
+    ref: Optional[str]
     maxspeed: Optional[str]
     lanes: Optional[str]
     oneway: Optional[str]
@@ -128,6 +129,7 @@ def load_osm_map(map_file: str) -> OsmMapData:
             way_id=way_id,
             highway=highway,
             name=tags.get('name'),
+            ref=tags.get('ref'),
             maxspeed=tags.get('maxspeed'),
             lanes=tags.get('lanes'),
             oneway=tags.get('oneway'),
