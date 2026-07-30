@@ -5,4 +5,4 @@ gnss_position_node:
     log_interval_sec: 1.0
     subscribe_gnss_status: false
     subscribe_gnss_quality: false
-    map_file: ""
+    map_file: "/home/fmon005/ros2_ws_foxy/map/map.osm"
