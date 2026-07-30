@@ -4,7 +4,7 @@ import os
 import time
 import xml.etree.ElementTree as ET
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Mapping, Optional, Tuple
 
 
@@ -15,6 +15,7 @@ class OsmNode:
     node_id: int
     latitude: float
     longitude: float
+    tags: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,8 @@ class OsmHighwayWay:
     oneway: Optional[str]
     node_references: Tuple[int, ...]
     coordinates: Tuple[Tuple[float, float], ...]
+    junction: Optional[str] = None
+    tags: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -88,10 +91,21 @@ def load_osm_map(map_file: str) -> OsmMapData:
     # Keep only the compact data needed after each element has been consumed.
     for _, element in ET.iterparse(path, events=('end',)):
         if element.tag == 'node':
+            tags = {
+                child.attrib['k']: child.attrib['v']
+                for child in element if child.tag == 'tag'
+            }
+            relevant_tags = {
+                key: value for key, value in tags.items()
+                if ((key == 'highway' and value in (
+                    'traffic_signals', 'stop', 'give_way')) or
+                    key in ('junction', 'crossing', 'traffic_signals'))
+            }
             node = OsmNode(
                 node_id=int(element.attrib['id']),
                 latitude=float(element.attrib['lat']),
                 longitude=float(element.attrib['lon']),
+                tags=relevant_tags,
             )
             nodes[node.node_id] = node
             element.clear()
@@ -135,6 +149,8 @@ def load_osm_map(map_file: str) -> OsmMapData:
             oneway=tags.get('oneway'),
             node_references=references,
             coordinates=coordinates,
+            junction=tags.get('junction'),
+            tags={'junction': tags['junction']} if 'junction' in tags else {},
         ))
         highway_counts[highway] += 1
 

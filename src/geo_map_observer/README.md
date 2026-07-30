@@ -103,6 +103,10 @@ validation, so both NaN and `0.0` are accepted.
 | `enable_status_warning_log` | `true` | Enable status/invalid-fix warnings. |
 | `status_warning_log_interval_sec` | `10.0` | Warning throttle interval. |
 | `enable_road_matching` | `true` | Match every accepted fix when a map is loaded. |
+| `enable_road_topology` | `true` | Build static drivable-road topology once during map startup. |
+| `junction_branch_merge_angle_deg` | `20.0` | Maximum circular bearing difference for merging physical branches; must be greater than 0 and less than 90. |
+| `enable_topology_summary_log` | `true` | Print one compact topology summary after construction. |
+| `enable_junction_candidate_log` | `false` | Print one debug line per candidate junction. |
 | `max_match_distance_m` | `20.0` | Maximum distance for a successful match. |
 | `drivable_highway_types` | major road types, `residential`, `living_street`, `service` | Highway values eligible for vehicle matching. |
 | `subscribe_gnss_status` | `false` | Cache `/gnss/status` messages. |
@@ -126,6 +130,44 @@ default; users may explicitly add values such as `track` or `path`. Startup
 logs report totals and per-type counts for both groups. Matching uses a local
 metric projection and point-to-segment distance. It does not infer access from
 other OSM tags, vehicle heading, or route continuity.
+
+## Static road topology and junction candidates
+
+When a map is loaded and `enable_road_topology` is true, the node builds an
+in-memory topology once at startup from the same configured drivable ways used
+by road matching. It does not wait for `/gnss/fix`, and accepted fixes continue
+to use the Task 4 matcher after topology construction. Setting the parameter to
+false skips this work without disabling matching.
+
+An OSM way is an ordered geometry and tagging unit, not necessarily one
+physical road. Mappers commonly split a continuous road into multiple ways
+where `maxspeed`, `lanes`, `name`, `ref`, `surface`, or `oneway` changes.
+Consequently, connected-way count alone cannot identify a junction. The
+topology creates a segment for each valid consecutive node pair and examines
+the direction leaving each shared node. Bearings within
+`junction_branch_merge_angle_deg` (including across north's 0/360-degree
+boundary) are grouped into one physical branch. A node becomes a static
+candidate only when at least three physical outgoing branches remain.
+Underlying ways and segments are retained unchanged.
+
+The startup summary reports topology size, invalid/missing/zero-length segment
+counts, candidates by branch count, retained traffic controls, and explicit
+roundabout/circular way counts. Per-candidate output is intentionally disabled
+by default. Relevant OSM node tags (`highway=traffic_signals|stop|give_way`,
+`junction`, `crossing`, and `traffic_signals`) are retained; unrelated node
+tags are not.
+
+Topology tests need neither ROS nor a rosbag:
+
+```bash
+python3 -m pytest src/geo_map_observer/test/test_road_topology.py -q
+```
+
+Current limitations are intentional: connectivity exists only where ways
+share an OSM node ID. The package does not find geometric crossings, classify
+T/cross/Y junction shapes, determine whether the vehicle passes a candidate,
+infer maneuvers, use heading/route continuity, model a whole roundabout as one
+node, or create output/visualization artifacts.
 
 ## Test
 

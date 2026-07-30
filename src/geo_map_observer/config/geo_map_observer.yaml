@@ -9,6 +9,10 @@ gnss_position_node:
     enable_status_warning_log: true
     status_warning_log_interval_sec: 10.0
     enable_road_matching: true
+    enable_road_topology: true
+    junction_branch_merge_angle_deg: 20.0
+    enable_topology_summary_log: true
+    enable_junction_candidate_log: false
     max_match_distance_m: 20.0
     drivable_highway_types:
       - motorway
