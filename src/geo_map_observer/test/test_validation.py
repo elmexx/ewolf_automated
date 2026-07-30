@@ -24,13 +24,19 @@ def nav_sat_fix(status=0, latitude=48.123, longitude=9.123,
     )
 
 
-@pytest.mark.parametrize('altitude', [420.3, float('nan')])
+@pytest.mark.parametrize('altitude', [420.3, float('nan'), 0.0])
 def test_valid_fix_accepts_known_or_unknown_altitude(altitude):
     assert validate_nav_sat_fix(nav_sat_fix(altitude=altitude)) == (True, 'valid')
 
 
-def test_status_no_fix_is_rejected():
-    assert validate_nav_sat_fix(nav_sat_fix(status=-1)) == (False, 'no_fix')
+def test_strict_mode_rejects_status_no_fix():
+    assert validate_nav_sat_fix(
+        nav_sat_fix(status=-1), require_fix_status=True) == (False, 'no_fix')
+
+
+def test_permissive_mode_accepts_valid_status_no_fix_coordinates():
+    assert validate_nav_sat_fix(nav_sat_fix(status=-1)) == (
+        True, 'no_fix_accepted')
 
 
 def test_required_nav_sat_fix_fields_are_extracted():
@@ -38,7 +44,9 @@ def test_required_nav_sat_fix_fields_are_extracted():
 
     assert position.timestamp_ns == 12_000_000_345
     assert position.frame_id == 'gnss_link'
+    assert position.navsat_status == 0
     assert position.status == 0
+    assert position.status_valid is True
     assert position.latitude == 48.123
     assert position.longitude == 9.123
     assert position.altitude == 420.3
@@ -59,8 +67,17 @@ def test_required_nav_sat_fix_fields_are_extracted():
     ],
 )
 def test_invalid_coordinates_are_rejected(latitude, longitude, reason):
-    assert validate_nav_sat_fix(nav_sat_fix(
-        latitude=latitude, longitude=longitude)) == (False, reason)
+    message = nav_sat_fix(status=-1, latitude=latitude, longitude=longitude)
+    assert validate_nav_sat_fix(message) == (False, reason)
+    assert validate_nav_sat_fix(
+        message, require_fix_status=True) == (False, reason)
+
+
+def test_extracted_no_fix_status_is_preserved_and_marked_invalid():
+    position = extract_nav_sat_fix(nav_sat_fix(status=-1))
+
+    assert position.navsat_status == -1
+    assert position.status_valid is False
 
 
 @pytest.mark.parametrize(
