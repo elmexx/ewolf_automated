@@ -2,7 +2,29 @@ gnss_position_node:
   ros__parameters:
     gnss_fix_topic: /gnss/fix
     require_fix_status: false
-    log_interval_sec: 1.0
+    enable_gnss_position_log: false
+    gnss_position_log_interval_sec: 1.0
+    enable_road_match_log: true
+    road_match_log_interval_sec: 1.0
+    enable_status_warning_log: true
+    status_warning_log_interval_sec: 10.0
+    enable_road_matching: true
+    max_match_distance_m: 20.0
+    drivable_highway_types:
+      - motorway
+      - motorway_link
+      - trunk
+      - trunk_link
+      - primary
+      - primary_link
+      - secondary
+      - secondary_link
+      - tertiary
+      - tertiary_link
+      - unclassified
+      - residential
+      - living_street
+      - service
     subscribe_gnss_status: false
     subscribe_gnss_quality: false
     map_file: "/home/fmon005/ros2_ws_foxy/map/map.osm"

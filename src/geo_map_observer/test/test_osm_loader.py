@@ -32,6 +32,7 @@ def test_ordered_coordinates_and_tags_are_preserved():
         (48.05, 9.2), (48.1, 9.1), (48.2, 9.3))
     assert way.highway == 'primary'
     assert way.name == 'Test Road'
+    assert way.ref == 'B14'
     assert way.maxspeed == '50'
     assert way.lanes == '2'
     assert way.oneway == 'yes'

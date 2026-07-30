@@ -10,6 +10,7 @@
     <nd ref="2"/>
     <tag k="highway" v="primary"/>
     <tag k="name" v="Test Road"/>
+    <tag k="ref" v="B14"/>
     <tag k="maxspeed" v="50"/>
     <tag k="lanes" v="2"/>
     <tag k="oneway" v="yes"/>
