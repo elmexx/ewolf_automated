@@ -8,6 +8,7 @@ from rclpy.node import Node
 from sensor_driver_msgs.msg import GnssQuality, GnssStatus
 from sensor_msgs.msg import NavSatFix
 
+from geo_map_observer.osm_loader import load_osm_map
 from geo_map_observer.validation import extract_nav_sat_fix, validate_nav_sat_fix
 
 
@@ -22,6 +23,7 @@ class GnssPositionNode(Node):
         self.declare_parameter('log_interval_sec', 1.0)
         self.declare_parameter('subscribe_gnss_status', False)
         self.declare_parameter('subscribe_gnss_quality', False)
+        self.declare_parameter('map_file', '')
 
         fix_topic = str(self.get_parameter('gnss_fix_topic').value)
         self._require_fix_status = bool(
@@ -41,6 +43,18 @@ class GnssPositionNode(Node):
         self._last_log_time_ns: Optional[int] = None
         self._last_diagnostic_log_time_ns: Optional[int] = None
         self._counters_logged = False
+        self.osm_map = None
+
+        map_file = str(self.get_parameter('map_file').value)
+        if map_file:
+            try:
+                self.osm_map = load_osm_map(map_file)
+            except Exception as error:
+                self.get_logger().error(
+                    'Failed to load requested OSM map {!r}: {}'.format(
+                        map_file, error))
+                raise
+            self._log_map_summary()
 
         self._fix_subscription = self.create_subscription(
             NavSatFix, fix_topic, self._fix_callback, 10)
@@ -59,6 +73,25 @@ class GnssPositionNode(Node):
             'require_fix_status={}'.format(self._require_fix_status))
         self.get_logger().info(
             'log_interval_sec={}'.format(self._log_interval_sec))
+
+    def _log_map_summary(self) -> None:
+        """Log one concise summary for the map loaded during startup."""
+        data = self.osm_map
+        bounds = data.bounding_box
+        bounding_box = ('none' if bounds is None else
+                        'lat=[{}, {}], lon=[{}, {}]'.format(
+                            bounds.min_latitude, bounds.max_latitude,
+                            bounds.min_longitude, bounds.max_longitude))
+        self.get_logger().info(
+            'OSM map loaded: path={}, nodes={}, ways={}, retained_highways={}, '
+            'skipped_highways={}, ways_with_missing_refs={}, missing_refs={}, '
+            'bounding_box={}, highway_types={}, duration_sec={:.3f}'.format(
+                data.path, data.total_node_count, data.total_way_count,
+                data.retained_highway_way_count,
+                data.skipped_highway_way_count,
+                data.ways_with_missing_node_references,
+                data.missing_node_reference_count, bounding_box,
+                dict(data.highway_type_counts), data.loading_duration_sec))
 
     def _fix_callback(self, message: NavSatFix) -> None:
         self.messages_received += 1

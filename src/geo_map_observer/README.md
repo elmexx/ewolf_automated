@@ -2,8 +2,9 @@
 
 `geo_map_observer` is a ROS 2 Foxy Python package that subscribes to
 `sensor_msgs/msg/NavSatFix`, validates geographic coordinates, and periodically
-logs valid latitude/longitude observations. It does not use
-ECEF, NED, velocity, IMU, localization, maps, or web services.
+logs valid latitude/longitude observations. It can also load road geometry from
+an offline OSM XML map at startup. Map loading remains independent of GNSS
+callbacks; nearest-road matching is not implemented.
 
 By default the node listens on `/gnss/fix`. It can optionally cache the latest
 `sensor_driver_msgs/msg/GnssStatus` and `GnssQuality` messages without
@@ -46,6 +47,22 @@ ros2 run geo_map_observer gnss_position_node --ros-args \
   -p subscribe_gnss_status:=true -p subscribe_gnss_quality:=true
 ```
 
+Load a map stored outside the package (for example under the workspace's
+`maps/` directory):
+
+```bash
+ros2 run geo_map_observer gnss_position_node --ros-args \
+  -p map_file:=/absolute/path/to/workspace/maps/map.osm \
+  -p require_fix_status:=false \
+  -p log_interval_sec:=0.0
+```
+
+The loader expands `~`, resolves the path, and requires an existing regular
+file with a `.osm` extension. A requested map that cannot be parsed stops node
+startup with an error. The source map is never copied into the installed ROS
+package. The launch file accepts the same setting as
+`map_file:=/absolute/path/to/workspace/maps/map.osm`.
+
 ## Use with a rosbag
 
 Start the observer in one sourced terminal. In another sourced terminal, play a
@@ -82,6 +99,17 @@ validation, so both NaN and `0.0` are accepted.
 | `log_interval_sec` | `1.0` | Minimum interval between logs of each throttled category. |
 | `subscribe_gnss_status` | `false` | Cache `/gnss/status` messages. |
 | `subscribe_gnss_quality` | `false` | Cache `/gnss/quality` messages. |
+| `map_file` | `""` | Offline `.osm` XML file to load; empty disables map loading. |
+
+## Offline OSM loading
+
+`geo_map_observer.osm_loader` uses the Python standard library's streaming XML
+parser. It retains every OSM node and every way tagged `highway` that resolves
+to at least two coordinates, including ordered node references, coordinates,
+and the optional `name`, `maxspeed`, `lanes`, and `oneway` tags. Non-highway
+ways are ignored. Missing references and skipped highway ways are counted and
+reported in a single startup summary together with the map bounds and highway
+type counts.
 
 ## Test
 

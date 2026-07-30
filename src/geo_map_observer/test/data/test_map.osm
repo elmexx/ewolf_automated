@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="geo_map_observer tests">
+  <node id="1" lat="48.1000" lon="9.1000"/>
+  <node id="2" lat="48.2000" lon="9.3000"/>
+  <node id="3" lat="48.0500" lon="9.2000"/>
+  <node id="4" lat="48.3000" lon="9.0500"/>
+  <way id="100">
+    <nd ref="3"/>
+    <nd ref="1"/>
+    <nd ref="2"/>
+    <tag k="highway" v="primary"/>
+    <tag k="name" v="Test Road"/>
+    <tag k="maxspeed" v="50"/>
+    <tag k="lanes" v="2"/>
+    <tag k="oneway" v="yes"/>
+  </way>
+  <way id="200">
+    <nd ref="1"/>
+    <nd ref="4"/>
+    <tag k="building" v="yes"/>
+  </way>
+  <way id="300">
+    <nd ref="4"/>
+    <nd ref="999"/>
+    <tag k="highway" v="service"/>
+  </way>
+</osm>
