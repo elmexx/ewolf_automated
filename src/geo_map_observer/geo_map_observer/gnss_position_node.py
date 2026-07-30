@@ -16,6 +16,7 @@ from geo_map_observer.road_matcher import (
     classify_highway_ways,
     match_nearest_road,
 )
+from geo_map_observer.road_topology import build_road_topology
 from geo_map_observer.validation import extract_nav_sat_fix, validate_nav_sat_fix
 
 
@@ -34,6 +35,10 @@ class GnssPositionNode(Node):
         self.declare_parameter('enable_status_warning_log', True)
         self.declare_parameter('status_warning_log_interval_sec', 10.0)
         self.declare_parameter('enable_road_matching', True)
+        self.declare_parameter('enable_road_topology', True)
+        self.declare_parameter('junction_branch_merge_angle_deg', 20.0)
+        self.declare_parameter('enable_topology_summary_log', True)
+        self.declare_parameter('enable_junction_candidate_log', False)
         self.declare_parameter('max_match_distance_m', 20.0)
         self.declare_parameter(
             'drivable_highway_types', list(DEFAULT_DRIVABLE_HIGHWAY_TYPES))
@@ -58,6 +63,14 @@ class GnssPositionNode(Node):
             self.get_parameter('status_warning_log_interval_sec').value)
         self._enable_road_matching = bool(
             self.get_parameter('enable_road_matching').value)
+        self._enable_road_topology = bool(
+            self.get_parameter('enable_road_topology').value)
+        self._branch_merge_angle_deg = float(
+            self.get_parameter('junction_branch_merge_angle_deg').value)
+        self._enable_topology_summary_log = bool(
+            self.get_parameter('enable_topology_summary_log').value)
+        self._enable_junction_candidate_log = bool(
+            self.get_parameter('enable_junction_candidate_log').value)
         self._max_match_distance_m = float(
             self.get_parameter('max_match_distance_m').value)
         self._drivable_highway_types = tuple(
@@ -70,6 +83,12 @@ class GnssPositionNode(Node):
                 ('max_match_distance_m', self._max_match_distance_m)):
             if value < 0.0:
                 raise ValueError('{} must be greater than or equal to zero'.format(name))
+        if not 0.0 < self._branch_merge_angle_deg < 90.0:
+            message = ('junction_branch_merge_angle_deg must be greater than '
+                       '0 and less than 90; received {}'.format(
+                           self._branch_merge_angle_deg))
+            self.get_logger().error(message)
+            raise ValueError(message)
 
         self.messages_received = 0
         self.valid_fixes = 0
@@ -89,6 +108,7 @@ class GnssPositionNode(Node):
         self._counters_logged = False
         self.osm_map = None
         self.drivable_highway_ways = ()
+        self.road_topology = None
 
         map_file = str(self.get_parameter('map_file').value)
         if map_file:
@@ -102,6 +122,11 @@ class GnssPositionNode(Node):
             self._log_map_summary()
             self.drivable_highway_ways, _ = classify_highway_ways(
                 self.osm_map, self._drivable_highway_types)
+            if self._enable_road_topology:
+                self.road_topology = build_road_topology(
+                    self.osm_map, self.drivable_highway_ways,
+                    self._branch_merge_angle_deg)
+                self._log_topology()
 
         self._fix_subscription = self.create_subscription(
             NavSatFix, fix_topic, self._fix_callback, 10)
@@ -148,6 +173,41 @@ class GnssPositionNode(Node):
                 statistics.contextual_way_count,
                 dict(statistics.drivable_type_counts),
                 dict(statistics.contextual_type_counts)))
+
+    def _log_topology(self) -> None:
+        """Optionally log the startup topology summary and candidates."""
+        topology = self.road_topology
+        stats = topology.statistics
+        if self._enable_topology_summary_log:
+            self.get_logger().info(
+                'Road topology built: drivable_ways={}, nodes={}, segments={}, '
+                'skipped_invalid_segments={}, missing_node_references={}, '
+                'zero_length_segments={}, junction_candidates={}, '
+                'branch_counts={}, traffic_signal_candidates={}, '
+                'stop_nodes={}, give_way_nodes={}, roundabout_ways={}, '
+                'circular_junction_ways={}, duration_sec={:.3f}'.format(
+                    stats.drivable_way_count, stats.topology_node_count,
+                    stats.segment_count, stats.skipped_invalid_segment_count,
+                    stats.missing_node_reference_count,
+                    stats.zero_length_segment_count,
+                    stats.junction_candidate_count,
+                    dict(stats.candidate_counts_by_physical_branch_count),
+                    stats.traffic_signal_candidate_count,
+                    stats.stop_node_count, stats.give_way_node_count,
+                    len(stats.roundabout_way_ids),
+                    len(stats.circular_junction_way_ids),
+                    stats.build_duration_sec))
+        if self._enable_junction_candidate_log:
+            for candidate in topology.junction_candidates:
+                self.get_logger().info(
+                    'JunctionCandidate: node_id={} lat={:.8f} lon={:.8f} '
+                    'physical_branches={} bearings={} ways={} signals={}'.format(
+                        candidate.node_id, candidate.latitude,
+                        candidate.longitude, candidate.physical_branch_count,
+                        [round(value, 1) for value in
+                         candidate.physical_branch_bearings_deg],
+                        list(candidate.connected_way_ids),
+                        str(candidate.has_traffic_signals).lower()))
 
     def _fix_callback(self, message: NavSatFix) -> None:
         self.messages_received += 1
