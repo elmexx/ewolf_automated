@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from geo_map_observer.junction_classifier import ClassifiedJunction, JunctionType
 from geo_map_observer.osm_loader import OsmHighwayWay
 from geo_map_observer.road_matcher import RoadMatch, match_nearest_road
 from geo_map_observer.visualization_exporter import VisualizationExporter
@@ -84,6 +85,42 @@ def test_empty_runtime_is_valid_and_atomic(tmp_path):
     assert state['latest_match']['matched'] is False
     assert state['gnss_track'] == state['matched_track'] == []
     assert not list(tmp_path.glob('*.tmp'))
+
+
+def test_empty_junction_export_is_valid_and_runtime_remains_compatible(tmp_path):
+    output = exporter(tmp_path)
+    before = json.loads((tmp_path / 'runtime_state.json').read_text())
+    assert output.export_junctions(()) == 0
+    document = json.loads((tmp_path / 'junctions.geojson').read_text())
+    assert document == {'type': 'FeatureCollection', 'features': []}
+    assert json.loads((tmp_path / 'runtime_state.json').read_text()) == before
+
+
+def test_junction_export_uses_lon_lat_and_preserves_properties(tmp_path):
+    output = exporter(tmp_path)
+    junction = ClassifiedJunction(
+        42, 48.1, 9.2, JunctionType.T_JUNCTION, 3,
+        (0.0, 90.0, 180.0), (10, 11, 12), True)
+    assert output.export_junctions((junction,)) == 1
+    feature = json.loads((tmp_path / 'junctions.geojson').read_text())[
+        'features'][0]
+    assert feature['geometry']['coordinates'] == [9.2, 48.1]
+    assert feature['properties'] == {
+        'node_id': 42, 'junction_type': 'T_JUNCTION',
+        'physical_branch_count': 3,
+        'physical_branch_bearings_deg': [0.0, 90.0, 180.0],
+        'connected_way_ids': [10, 11, 12],
+        'has_traffic_signals': True}
+
+
+def test_junction_export_handles_missing_optional_properties(tmp_path):
+    output = exporter(tmp_path)
+    minimal = SimpleNamespace(latitude=48.1, longitude=9.2)
+    output.export_junctions((minimal,))
+    properties = json.loads((tmp_path / 'junctions.geojson').read_text())[
+        'features'][0]['properties']
+    assert properties['junction_type'] is None
+    assert properties['physical_branch_bearings_deg'] == []
 
 
 def test_matched_and_unmatched_observations(tmp_path):

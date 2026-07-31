@@ -96,6 +96,33 @@ class VisualizationExporter:
                           {'type': 'FeatureCollection', 'features': features})
         return {'total': len(features), **counts}
 
+    def export_junctions(self, junctions: Iterable[object]) -> int:
+        """Write classified junction points once as a GeoJSON collection."""
+        features = []
+        for junction in junctions:
+            junction_type = getattr(junction, 'junction_type', None)
+            features.append({
+                'type': 'Feature',
+                'geometry': {'type': 'Point', 'coordinates': [
+                    getattr(junction, 'longitude', None),
+                    getattr(junction, 'latitude', None)]},
+                'properties': {
+                    'node_id': getattr(junction, 'node_id', None),
+                    'junction_type': getattr(junction_type, 'value', junction_type),
+                    'physical_branch_count': getattr(
+                        junction, 'physical_branch_count', None),
+                    'physical_branch_bearings_deg': list(getattr(
+                        junction, 'physical_branch_bearings_deg', ()) or ()),
+                    'connected_way_ids': list(getattr(
+                        junction, 'connected_way_ids', ()) or ()),
+                    'has_traffic_signals': getattr(
+                        junction, 'has_traffic_signals', None),
+                },
+            })
+        self._atomic_json('junctions.geojson',
+                          {'type': 'FeatureCollection', 'features': features})
+        return len(features)
+
     def observe(
             self, gnss: object, match: Optional[RoadMatch],
             counters: Mapping[str, int], now_ns: Optional[int] = None,

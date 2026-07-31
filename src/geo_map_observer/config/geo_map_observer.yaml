@@ -13,6 +13,9 @@ gnss_position_node:
     junction_branch_merge_angle_deg: 20.0
     enable_topology_summary_log: true
     enable_junction_candidate_log: false
+    enable_junction_classification: true
+    junction_opposite_tolerance_deg: 25.0
+    enable_junction_classification_summary_log: true
     max_match_distance_m: 20.0
     drivable_highway_types:
       - motorway

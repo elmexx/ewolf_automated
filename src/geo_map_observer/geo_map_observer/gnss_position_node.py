@@ -1,6 +1,8 @@
 """ROS 2 node that observes and validates geographic GNSS fixes."""
 
 import math
+import time
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +13,8 @@ from sensor_driver_msgs.msg import GnssQuality, GnssStatus
 from sensor_msgs.msg import NavSatFix
 
 from geo_map_observer.osm_loader import load_osm_map
+from geo_map_observer.junction_classifier import (
+    JunctionType, classify_junction_candidates)
 from geo_map_observer.road_matcher import (
     DEFAULT_DRIVABLE_HIGHWAY_TYPES,
     RoadMatchLogThrottle,
@@ -42,6 +46,10 @@ class GnssPositionNode(Node):
         self.declare_parameter('junction_branch_merge_angle_deg', 20.0)
         self.declare_parameter('enable_topology_summary_log', True)
         self.declare_parameter('enable_junction_candidate_log', False)
+        self.declare_parameter('enable_junction_classification', True)
+        self.declare_parameter('junction_opposite_tolerance_deg', 25.0)
+        self.declare_parameter(
+            'enable_junction_classification_summary_log', True)
         self.declare_parameter('max_match_distance_m', 20.0)
         self.declare_parameter(
             'drivable_highway_types', list(DEFAULT_DRIVABLE_HIGHWAY_TYPES))
@@ -84,6 +92,13 @@ class GnssPositionNode(Node):
             self.get_parameter('enable_topology_summary_log').value)
         self._enable_junction_candidate_log = bool(
             self.get_parameter('enable_junction_candidate_log').value)
+        self._enable_junction_classification = bool(
+            self.get_parameter('enable_junction_classification').value)
+        self._junction_opposite_tolerance_deg = float(
+            self.get_parameter('junction_opposite_tolerance_deg').value)
+        self._enable_junction_classification_summary_log = bool(
+            self.get_parameter(
+                'enable_junction_classification_summary_log').value)
         self._max_match_distance_m = float(
             self.get_parameter('max_match_distance_m').value)
         self._drivable_highway_types = tuple(
@@ -108,6 +123,12 @@ class GnssPositionNode(Node):
             message = ('junction_branch_merge_angle_deg must be greater than '
                        '0 and less than 90; received {}'.format(
                            self._branch_merge_angle_deg))
+            self.get_logger().error(message)
+            raise ValueError(message)
+        if not 0.0 < self._junction_opposite_tolerance_deg < 90.0:
+            message = ('junction_opposite_tolerance_deg must be greater than '
+                       '0 and less than 90; received {}'.format(
+                           self._junction_opposite_tolerance_deg))
             self.get_logger().error(message)
             raise ValueError(message)
         if self._visualization_interval_sec <= 0.0:
@@ -143,6 +164,7 @@ class GnssPositionNode(Node):
         self.drivable_highway_ways = ()
         self.contextual_highway_ways = ()
         self.road_topology = None
+        self.classified_junctions = ()
         self.visualization_exporter = None
 
         map_file = str(self.get_parameter('map_file').value)
@@ -163,6 +185,8 @@ class GnssPositionNode(Node):
                     self.osm_map, self.drivable_highway_ways,
                     self._branch_merge_angle_deg)
                 self._log_topology()
+                if self._enable_junction_classification:
+                    self._classify_junctions()
 
         if self._enable_visualization:
             self._initialize_visualization()
@@ -247,6 +271,23 @@ class GnssPositionNode(Node):
                          candidate.physical_branch_bearings_deg],
                         list(candidate.connected_way_ids),
                         str(candidate.has_traffic_signals).lower()))
+
+    def _classify_junctions(self) -> None:
+        """Classify the startup topology exactly once."""
+        started = time.monotonic()
+        self.classified_junctions = classify_junction_candidates(
+            self.road_topology.junction_candidates,
+            self._junction_opposite_tolerance_deg)
+        duration = time.monotonic() - started
+        if self._enable_junction_classification_summary_log:
+            counts = Counter(
+                junction.junction_type for junction in self.classified_junctions)
+            self.get_logger().info(
+                'Junction classification completed: candidates={} {} '
+                'duration_sec={:.3f}'.format(
+                    len(self.classified_junctions), ' '.join(
+                        '{}={}'.format(kind.value, counts[kind])
+                        for kind in JunctionType), duration))
 
     def _fix_callback(self, message: NavSatFix) -> None:
         self.messages_received += 1
@@ -362,14 +403,17 @@ class GnssPositionNode(Node):
                 'visualization_export_drivable_highways').value),
             bool(self.get_parameter(
                 'visualization_export_contextual_highways').value))
+        junction_count = self.visualization_exporter.export_junctions(
+            self.classified_junctions)
         output_dir = str(self.visualization_exporter.output_dir)
         self.get_logger().info(
             'Visualization initialized:\noutput_dir={}\nstatic_osm_features={}\n'
             'drivable_features={}\ncontextual_features={}\n'
-            'runtime_file=runtime_state.json\nserve_command="python3 -m '
+            'junction_features={}\nruntime_file=runtime_state.json\n'
+            'serve_command="python3 -m '
             'http.server 8080 --directory {}"\nurl=http://localhost:8080/'.format(
                 output_dir, counts['total'], counts['drivable'],
-                counts['contextual'], output_dir))
+                counts['contextual'], junction_count, output_dir))
 
     def _status_callback(self, message: GnssStatus) -> None:
         self.latest_status = message

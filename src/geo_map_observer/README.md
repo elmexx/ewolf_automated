@@ -107,6 +107,9 @@ validation, so both NaN and `0.0` are accepted.
 | `junction_branch_merge_angle_deg` | `20.0` | Maximum circular bearing difference for merging physical branches; must be greater than 0 and less than 90. |
 | `enable_topology_summary_log` | `true` | Print one compact topology summary after construction. |
 | `enable_junction_candidate_log` | `false` | Print one debug line per candidate junction. |
+| `enable_junction_classification` | `true` | Classify topology candidates once at startup; requires topology. |
+| `junction_opposite_tolerance_deg` | `25.0` | Maximum deviation from 180 degrees for opposite branches; must be greater than 0 and less than 90. |
+| `enable_junction_classification_summary_log` | `true` | Print one compact startup classification summary. |
 | `max_match_distance_m` | `20.0` | Maximum distance for a successful match. |
 | `drivable_highway_types` | major road types, `residential`, `living_street`, `service` | Highway values eligible for vehicle matching. |
 | `subscribe_gnss_status` | `false` | Cache `/gnss/status` messages. |
@@ -163,11 +166,25 @@ Topology tests need neither ROS nor a rosbag:
 python3 -m pytest src/geo_map_observer/test/test_road_topology.py -q
 ```
 
+### Static junction classification
+
+When both topology and junction classification are enabled, every extracted
+candidate is classified once at startup using only its physical branch
+bearings. Three branches are a `T_JUNCTION` when any pair is approximately
+opposite and a `Y_JUNCTION` otherwise. Four branches are a
+`CROSS_INTERSECTION` when one of the three possible pairings contains two
+approximately opposite pairs; other valid four-way shapes remain
+`FOUR_WAY_UNKNOWN`. Five or more branches are `MULTI_WAY`. Invalid three-way
+inputs remain `THREE_WAY_UNKNOWN`. Opposite means within
+`junction_opposite_tolerance_deg` of 180 degrees; a cross need not be
+perpendicular. Disabling classification leaves topology and road matching
+enabled, while disabling topology necessarily skips classification.
+
 Current limitations are intentional: connectivity exists only where ways
-share an OSM node ID. The package does not find geometric crossings, classify
-T/cross/Y junction shapes, determine whether the vehicle passes a candidate,
-infer maneuvers, use heading/route continuity, model a whole roundabout as one
-node, or create output/visualization artifacts.
+share an OSM node ID. The package does not find geometric crossings, score
+confidence, explain classifications, classify roundabouts, determine whether
+the vehicle passes a candidate, infer maneuvers, use heading/route continuity,
+or model a whole roundabout as one node.
 
 ## Test
 
@@ -200,7 +217,8 @@ Then:
 3. Open <http://localhost:8080/>.
 4. Publish valid `/gnss/fix` messages or play a rosbag containing them.
 
-The Leaflet layer control switches drivable/contextual vectors, dashed raw GNSS
+The Leaflet layer control switches drivable/contextual vectors, static
+`Junctions` markers, dashed raw GNSS
 track, heavier matched track, latest markers, the GNSS-to-road error line, and
 the strongly highlighted current way. The information panel shows fix values,
 road tags, nearest point, distance, and counters; click a road for all exported
@@ -237,7 +255,15 @@ uses `[longitude, latitude]` coordinates and has `way_id`, `highway`,
 `updated_at_ns`, four counters, `follow_vehicle_default`, nullable `latest_gnss`,
 a `latest_match` object, and bounded `gnss_track`/`matched_track` arrays.
 
+When visualization is enabled, startup also writes `junctions.geojson` once,
+even when classification is disabled or produces no results. Each classified
+junction is a GeoJSON Point with longitude before latitude and includes its
+type, node ID, physical branch count and bearings, connected way IDs, and
+traffic-signal flag. The browser `Junctions` layer uses compact `T`, `Y`, `+`,
+unknown, or branch-count markers with the same details in a popup. Runtime GNSS
+writes never rewrite this static file.
+
 Current limitations: there is no heading/continuity matching, trajectory
-simplification, offline Leaflet/tile bundle, topology-candidate overlay,
-junction classification, WebSocket transport, or remote hosting. The viewer is
-intended for a trusted local HTTP server; it has no authentication.
+simplification, offline Leaflet/tile bundle, roundabout visualization,
+branch-direction ray overlay, WebSocket transport, or remote hosting. The
+viewer is intended for a trusted local HTTP server; it has no authentication.
