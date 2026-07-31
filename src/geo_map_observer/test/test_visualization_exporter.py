@@ -90,10 +90,26 @@ def test_empty_runtime_is_valid_and_atomic(tmp_path):
 def test_empty_junction_export_is_valid_and_runtime_remains_compatible(tmp_path):
     output = exporter(tmp_path)
     before = json.loads((tmp_path / 'runtime_state.json').read_text())
+    assert before['nearest_junction'] is None
     assert output.export_junctions(()) == 0
     document = json.loads((tmp_path / 'junctions.geojson').read_text())
     assert document == {'type': 'FeatureCollection', 'features': []}
     assert json.loads((tmp_path / 'runtime_state.json').read_text()) == before
+
+
+def test_runtime_state_exports_nearest_junction_and_remains_valid_json(tmp_path):
+    output = exporter(tmp_path)
+    nearest = SimpleNamespace(
+        node_id=42, junction_type='T_JUNCTION', distance_m=18.4)
+
+    output.observe(
+        gnss(), match(), counters(), now_ns=2_000_000_000,
+        nearest_junction=nearest)
+
+    state = json.loads((tmp_path / 'runtime_state.json').read_text())
+    assert state['nearest_junction'] == {
+        'node_id': 42, 'junction_type': 'T_JUNCTION', 'distance_m': 18.4}
+    assert state['latest_match']['matched'] is True
 
 
 def test_junction_export_uses_lon_lat_and_preserves_properties(tmp_path):

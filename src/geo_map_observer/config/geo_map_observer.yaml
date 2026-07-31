@@ -16,6 +16,7 @@ gnss_position_node:
     enable_junction_classification: true
     junction_opposite_tolerance_deg: 25.0
     enable_junction_classification_summary_log: true
+    enable_nearest_junction_lookup: true
     max_match_distance_m: 20.0
     drivable_highway_types:
       - motorway

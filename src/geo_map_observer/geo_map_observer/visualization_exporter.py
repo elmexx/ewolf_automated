@@ -32,6 +32,7 @@ class VisualizationExporter:
         self._last_match_identity = None
         self._latest_gnss = None
         self._latest_match = self._empty_match()
+        self._nearest_junction = None
         self._gnss_track = deque(maxlen=max_track_points)
         self._matched_track = deque(maxlen=max_track_points)
         self._counters = self._empty_counters()
@@ -126,7 +127,7 @@ class VisualizationExporter:
     def observe(
             self, gnss: object, match: Optional[RoadMatch],
             counters: Mapping[str, int], now_ns: Optional[int] = None,
-            force: bool = False) -> bool:
+            force: bool = False, nearest_junction: Optional[object] = None) -> bool:
         """Accumulate every observation and publish if due or match identity changed."""
         self._latest_gnss = {
             'timestamp_ns': gnss.timestamp_ns, 'latitude': gnss.latitude,
@@ -159,6 +160,11 @@ class VisualizationExporter:
                     'way_id': match.osm_way_id,
                 })
         self._latest_match = latest_match
+        self._nearest_junction = (None if nearest_junction is None else {
+            'node_id': nearest_junction.node_id,
+            'junction_type': nearest_junction.junction_type,
+            'distance_m': nearest_junction.distance_m,
+        })
         self._counters = dict(counters)
         identity = (latest_match['matched'], latest_match['way_id'],
                     latest_match['highway'])
@@ -179,6 +185,7 @@ class VisualizationExporter:
             'follow_vehicle_default': self._follow_vehicle_default,
             'latest_gnss': self._latest_gnss,
             'latest_match': self._latest_match,
+            'nearest_junction': self._nearest_junction,
             'gnss_track': list(self._gnss_track),
             'matched_track': list(self._matched_track),
         }
