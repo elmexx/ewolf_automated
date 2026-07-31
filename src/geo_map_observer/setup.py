@@ -17,6 +17,8 @@ setup(
         (os.path.join('share', package_name, 'launch'),
          glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
+        (os.path.join('share', package_name, 'web'),
+         glob(os.path.join(package_name, 'web', '*'))),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

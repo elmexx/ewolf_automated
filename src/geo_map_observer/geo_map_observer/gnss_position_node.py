@@ -1,9 +1,11 @@
 """ROS 2 node that observes and validates geographic GNSS fixes."""
 
 import math
+from pathlib import Path
 from typing import Optional
 
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from sensor_driver_msgs.msg import GnssQuality, GnssStatus
 from sensor_msgs.msg import NavSatFix
@@ -18,6 +20,7 @@ from geo_map_observer.road_matcher import (
 )
 from geo_map_observer.road_topology import build_road_topology
 from geo_map_observer.validation import extract_nav_sat_fix, validate_nav_sat_fix
+from geo_map_observer.visualization_exporter import VisualizationExporter
 
 
 class GnssPositionNode(Node):
@@ -45,6 +48,16 @@ class GnssPositionNode(Node):
         self.declare_parameter('subscribe_gnss_status', False)
         self.declare_parameter('subscribe_gnss_quality', False)
         self.declare_parameter('map_file', '')
+        self.declare_parameter('enable_visualization', False)
+        self.declare_parameter(
+            'visualization_output_dir', '/tmp/geo_map_observer_visualization')
+        self.declare_parameter('visualization_update_interval_sec', 0.5)
+        self.declare_parameter('visualization_max_track_points', 10000)
+        self.declare_parameter(
+            'visualization_export_contextual_highways', True)
+        self.declare_parameter('visualization_export_drivable_highways', True)
+        self.declare_parameter('visualization_export_topology_candidates', False)
+        self.declare_parameter('visualization_follow_vehicle_default', True)
 
         fix_topic = str(self.get_parameter('gnss_fix_topic').value)
         self._require_fix_status = bool(
@@ -76,6 +89,14 @@ class GnssPositionNode(Node):
         self._drivable_highway_types = tuple(
             str(value) for value in
             self.get_parameter('drivable_highway_types').value)
+        self._enable_visualization = bool(
+            self.get_parameter('enable_visualization').value)
+        self._visualization_output_dir = str(
+            self.get_parameter('visualization_output_dir').value)
+        self._visualization_interval_sec = float(
+            self.get_parameter('visualization_update_interval_sec').value)
+        self._visualization_max_track_points = int(
+            self.get_parameter('visualization_max_track_points').value)
         for name, value in (
                 ('gnss_position_log_interval_sec', self._gnss_log_interval_sec),
                 ('road_match_log_interval_sec', self._road_log_interval_sec),
@@ -87,6 +108,18 @@ class GnssPositionNode(Node):
             message = ('junction_branch_merge_angle_deg must be greater than '
                        '0 and less than 90; received {}'.format(
                            self._branch_merge_angle_deg))
+            self.get_logger().error(message)
+            raise ValueError(message)
+        if self._visualization_interval_sec <= 0.0:
+            message = ('visualization_update_interval_sec must be greater than '
+                       'zero; received {}'.format(
+                           self._visualization_interval_sec))
+            self.get_logger().error(message)
+            raise ValueError(message)
+        if self._visualization_max_track_points <= 0:
+            message = ('visualization_max_track_points must be greater than '
+                       'zero; received {}'.format(
+                           self._visualization_max_track_points))
             self.get_logger().error(message)
             raise ValueError(message)
 
@@ -108,7 +141,9 @@ class GnssPositionNode(Node):
         self._counters_logged = False
         self.osm_map = None
         self.drivable_highway_ways = ()
+        self.contextual_highway_ways = ()
         self.road_topology = None
+        self.visualization_exporter = None
 
         map_file = str(self.get_parameter('map_file').value)
         if map_file:
@@ -120,13 +155,17 @@ class GnssPositionNode(Node):
                         map_file, error))
                 raise
             self._log_map_summary()
-            self.drivable_highway_ways, _ = classify_highway_ways(
-                self.osm_map, self._drivable_highway_types)
+            (self.drivable_highway_ways,
+             self.contextual_highway_ways) = classify_highway_ways(
+                 self.osm_map, self._drivable_highway_types)
             if self._enable_road_topology:
                 self.road_topology = build_road_topology(
                     self.osm_map, self.drivable_highway_ways,
                     self._branch_merge_angle_deg)
                 self._log_topology()
+
+        if self._enable_visualization:
+            self._initialize_visualization()
 
         self._fix_subscription = self.create_subscription(
             NavSatFix, fix_topic, self._fix_callback, 10)
@@ -225,8 +264,12 @@ class GnssPositionNode(Node):
         self.valid_fixes += 1
         if not position.status_valid:
             self._log_diagnostic(position, reason, accepted=True)
+        road_match = None
         if self._enable_road_matching and self.osm_map is not None:
-            self._match_road(position)
+            road_match = self._match_road(position)
+        if self.visualization_exporter is not None:
+            self.visualization_exporter.observe(
+                position, road_match, self._visualization_counters())
         if not self._enable_gnss_position_log:
             return
         now_ns = self.get_clock().now().nanoseconds
@@ -259,7 +302,7 @@ class GnssPositionNode(Node):
                 outcome, position.navsat_status, position.latitude,
                 position.longitude, reason))
 
-    def _match_road(self, position) -> None:
+    def _match_road(self, position):
         """Match and count a valid fix; output throttling happens afterwards."""
         self.road_match_attempts += 1
         try:
@@ -269,24 +312,24 @@ class GnssPositionNode(Node):
         except Exception as error:
             self.road_match_errors += 1
             self.get_logger().error('Road matching failed: {}'.format(error))
-            return
+            return None
         if result.matched:
             self.road_matches += 1
         else:
             self.road_unmatched += 1
         if not self._enable_road_match_log:
-            return
+            return result
 
         now_ns = self.get_clock().now().nanoseconds
         if not self._road_log_throttle.should_log(result, now_ns):
-            return
+            return result
         if not result.matched:
             distance = ('unknown' if result.distance_m is None else
                         '{:.1f}m'.format(result.distance_m))
             self.get_logger().info(
                 'RoadMatch unmatched distance={} lat={:.8f} lon={:.8f}'.format(
                     distance, result.latitude, result.longitude))
-            return
+            return result
         road = result.name if result.name is not None else ''
         self.get_logger().info(
             'RoadMatch t={} way={} road="{}" ref={} type={} maxspeed={} '
@@ -294,6 +337,39 @@ class GnssPositionNode(Node):
                 result.timestamp_ns, result.osm_way_id, road,
                 result.ref or '', result.highway or '',
                 result.maxspeed_raw or '', result.distance_m))
+        return result
+
+    def _visualization_counters(self):
+        return {
+            'gnss_received_count': self.messages_received,
+            'match_attempt_count': self.road_match_attempts,
+            'matched_count': self.road_matches,
+            'unmatched_count': self.road_unmatched,
+        }
+
+    def _initialize_visualization(self) -> None:
+        """Create browser assets and static data without starting a server."""
+        self.visualization_exporter = VisualizationExporter(
+            self._visualization_output_dir, self._visualization_interval_sec,
+            self._visualization_max_track_points,
+            bool(self.get_parameter(
+                'visualization_follow_vehicle_default').value))
+        share_web = Path(get_package_share_directory('geo_map_observer')) / 'web'
+        self.visualization_exporter.initialize(str(share_web))
+        counts = self.visualization_exporter.export_highways(
+            self.drivable_highway_ways, self.contextual_highway_ways,
+            bool(self.get_parameter(
+                'visualization_export_drivable_highways').value),
+            bool(self.get_parameter(
+                'visualization_export_contextual_highways').value))
+        output_dir = str(self.visualization_exporter.output_dir)
+        self.get_logger().info(
+            'Visualization initialized:\noutput_dir={}\nstatic_osm_features={}\n'
+            'drivable_features={}\ncontextual_features={}\n'
+            'runtime_file=runtime_state.json\nserve_command="python3 -m '
+            'http.server 8080 --directory {}"\nurl=http://localhost:8080/'.format(
+                output_dir, counts['total'], counts['drivable'],
+                counts['contextual'], output_dir))
 
     def _status_callback(self, message: GnssStatus) -> None:
         self.latest_status = message
@@ -316,6 +392,13 @@ class GnssPositionNode(Node):
                 self.road_unmatched, self.road_match_errors))
 
     def destroy_node(self) -> bool:
+        if self.visualization_exporter is not None:
+            try:
+                self.visualization_exporter.write_runtime(
+                    counters=self._visualization_counters())
+            except Exception as error:
+                self.get_logger().warning(
+                    'Final visualization write failed: {}'.format(error))
         self.log_counters()
         return super().destroy_node()
 
