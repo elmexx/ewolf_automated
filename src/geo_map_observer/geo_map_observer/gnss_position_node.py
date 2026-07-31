@@ -15,6 +15,7 @@ from sensor_msgs.msg import NavSatFix
 from geo_map_observer.osm_loader import load_osm_map
 from geo_map_observer.junction_classifier import (
     JunctionType, classify_junction_candidates)
+from geo_map_observer.junction_lookup import JunctionLookup
 from geo_map_observer.road_matcher import (
     DEFAULT_DRIVABLE_HIGHWAY_TYPES,
     RoadMatchLogThrottle,
@@ -50,6 +51,7 @@ class GnssPositionNode(Node):
         self.declare_parameter('junction_opposite_tolerance_deg', 25.0)
         self.declare_parameter(
             'enable_junction_classification_summary_log', True)
+        self.declare_parameter('enable_nearest_junction_lookup', True)
         self.declare_parameter('max_match_distance_m', 20.0)
         self.declare_parameter(
             'drivable_highway_types', list(DEFAULT_DRIVABLE_HIGHWAY_TYPES))
@@ -99,6 +101,8 @@ class GnssPositionNode(Node):
         self._enable_junction_classification_summary_log = bool(
             self.get_parameter(
                 'enable_junction_classification_summary_log').value)
+        self._enable_nearest_junction_lookup = bool(
+            self.get_parameter('enable_nearest_junction_lookup').value)
         self._max_match_distance_m = float(
             self.get_parameter('max_match_distance_m').value)
         self._drivable_highway_types = tuple(
@@ -165,6 +169,7 @@ class GnssPositionNode(Node):
         self.contextual_highway_ways = ()
         self.road_topology = None
         self.classified_junctions = ()
+        self.junction_lookup = None
         self.visualization_exporter = None
 
         map_file = str(self.get_parameter('map_file').value)
@@ -187,6 +192,12 @@ class GnssPositionNode(Node):
                 self._log_topology()
                 if self._enable_junction_classification:
                     self._classify_junctions()
+
+        if self._enable_nearest_junction_lookup:
+            self.junction_lookup = JunctionLookup(self.classified_junctions)
+            self.get_logger().info(
+                'Nearest junction lookup initialized:\njunction_count={}'.format(
+                    self.junction_lookup.junction_count))
 
         if self._enable_visualization:
             self._initialize_visualization()
@@ -308,9 +319,13 @@ class GnssPositionNode(Node):
         road_match = None
         if self._enable_road_matching and self.osm_map is not None:
             road_match = self._match_road(position)
+        nearest_junction = (None if self.junction_lookup is None else
+                            self.junction_lookup.nearest(
+                                position.latitude, position.longitude))
         if self.visualization_exporter is not None:
             self.visualization_exporter.observe(
-                position, road_match, self._visualization_counters())
+                position, road_match, self._visualization_counters(),
+                nearest_junction=nearest_junction)
         if not self._enable_gnss_position_log:
             return
         now_ns = self.get_clock().now().nanoseconds

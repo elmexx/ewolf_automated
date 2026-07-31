@@ -110,6 +110,7 @@ validation, so both NaN and `0.0` are accepted.
 | `enable_junction_classification` | `true` | Classify topology candidates once at startup; requires topology. |
 | `junction_opposite_tolerance_deg` | `25.0` | Maximum deviation from 180 degrees for opposite branches; must be greater than 0 and less than 90. |
 | `enable_junction_classification_summary_log` | `true` | Print one compact startup classification summary. |
+| `enable_nearest_junction_lookup` | `true` | Look up the nearest startup-classified junction for each valid GNSS fix. |
 | `max_match_distance_m` | `20.0` | Maximum distance for a successful match. |
 | `drivable_highway_types` | major road types, `residential`, `living_street`, `service` | Highway values eligible for vehicle matching. |
 | `subscribe_gnss_status` | `false` | Cache `/gnss/status` messages. |
@@ -262,6 +263,20 @@ type, node ID, physical branch count and bearings, connected way IDs, and
 traffic-signal flag. The browser `Junctions` layer uses compact `T`, `Y`, `+`,
 unknown, or branch-count markers with the same details in a popup. Runtime GNSS
 writes never rewrite this static file.
+
+### Nearest classified junction
+
+When `enable_nearest_junction_lookup` is enabled, the node snapshots the
+startup-classified junction collection and performs a deterministic linear
+search for every valid GNSS fix. Distances are great-circle distances in metres;
+an exact tie is resolved using the lowest OSM node ID. The lookup is not run for
+invalid fixes and does not affect road matching.
+
+`runtime_state.json` exposes the result as nullable `nearest_junction`, with
+`node_id`, `junction_type`, and `distance_m`. The viewer repeats those values in
+its information panel and overlays the current nearest junction with a yellow
+marker. This feature only reports proximity; it does not infer entry, exit,
+heading, road transitions, or maneuvers.
 
 Current limitations: there is no heading/continuity matching, trajectory
 simplification, offline Leaflet/tile bundle, roundabout visualization,
