@@ -177,3 +177,67 @@ require ROS 2:
 ```bash
 python3 -m pytest src/geo_map_observer/test
 ```
+
+## Local GNSS and road-match visualization
+
+The optional initial browser viewer makes nearest-road behavior observable
+without changing matching or starting a server. It exports the classified OSM
+vectors once and atomically refreshes a bounded runtime track. Visualization is
+disabled by default.
+
+Set these YAML parameters (the remaining visualization settings are documented
+in the parameter table below):
+
+```yaml
+enable_visualization: true
+visualization_output_dir: "/tmp/geo_map_observer_visualization"
+```
+
+Then:
+
+1. Start the ROS node with the YAML configuration and a valid `map_file`.
+2. Run `python3 -m http.server 8080 --directory /tmp/geo_map_observer_visualization`.
+3. Open <http://localhost:8080/>.
+4. Publish valid `/gnss/fix` messages or play a rosbag containing them.
+
+The Leaflet layer control switches drivable/contextual vectors, dashed raw GNSS
+track, heavier matched track, latest markers, the GNSS-to-road error line, and
+the strongly highlighted current way. The information panel shows fix values,
+road tags, nearest point, distance, and counters; click a road for all exported
+attributes. **Follow vehicle** pans only when the marker approaches the visible
+edge and preserves zoom. Disable it to pan freely.
+
+The standard OpenStreetMap raster background requires internet access. Exported
+OSM vector roads and tracking data remain visible if raster tiles fail to load
+(the Leaflet library itself is also loaded from a public CDN in this initial
+version). `runtime_state.json` is polled every 500 ms without overlapping
+requests; stale data remains displayed during a failed request.
+
+Runtime writes are limited by `visualization_update_interval_sec`, but every
+accepted fix is still matched, counted, and accumulated. A matched/unmatched,
+way-ID, or highway change is written immediately. Each raw and matched track is
+independently capped at `visualization_max_track_points`. Shutdown attempts one
+final atomic write and retains the output directory for inspection.
+
+| Visualization parameter | Default | Description |
+| --- | --- | --- |
+| `enable_visualization` | `false` | Generate local viewer files. |
+| `visualization_output_dir` | `/tmp/geo_map_observer_visualization` | Viewer and data output directory. |
+| `visualization_update_interval_sec` | `0.5` | Regular runtime write interval; must be greater than zero. |
+| `visualization_max_track_points` | `10000` | Per-track bounded history; must be greater than zero. |
+| `visualization_export_contextual_highways` | `true` | Include contextual roads in static GeoJSON. |
+| `visualization_export_drivable_highways` | `true` | Include drivable roads in static GeoJSON. |
+| `visualization_export_topology_candidates` | `false` | Reserved for a future topology overlay; no candidates are exported in Task 6. |
+| `visualization_follow_vehicle_default` | `true` | Initial browser follow-control state. |
+
+`osm_highways.geojson` is a GeoJSON `FeatureCollection`; each unique LineString
+uses `[longitude, latitude]` coordinates and has `way_id`, `highway`,
+`road_group`, `name`, `ref`, `maxspeed_raw`, `maxspeed_kmh`, `lanes_raw`,
+`oneway_raw`, and `junction` properties. `runtime_state.json` contains wall-clock
+`updated_at_ns`, four counters, `follow_vehicle_default`, nullable `latest_gnss`,
+a `latest_match` object, and bounded `gnss_track`/`matched_track` arrays.
+
+Current limitations: there is no heading/continuity matching, trajectory
+simplification, offline Leaflet/tile bundle, topology-candidate overlay,
+junction classification, WebSocket transport, or remote hosting. The viewer is
+intended for a trusted local HTTP server; it has no authentication.

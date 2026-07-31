@@ -32,3 +32,11 @@ gnss_position_node:
     subscribe_gnss_status: false
     subscribe_gnss_quality: false
     map_file: "/home/fmon005/ros2_ws_foxy/map/map.osm"
+    enable_visualization: false
+    visualization_output_dir: "/tmp/geo_map_observer_visualization"
+    visualization_update_interval_sec: 0.5
+    visualization_max_track_points: 10000
+    visualization_export_contextual_highways: true
+    visualization_export_drivable_highways: true
+    visualization_export_topology_candidates: false
+    visualization_follow_vehicle_default: true
